@@ -1,0 +1,408 @@
+namespace: growthbook
+
+stack-mongodb:
+  defines: runnable
+  inherits: mongodb/mongodb
+  metadata:
+    name: GrowthBook Stack MongoDB
+    description: |
+      Private MongoDB datastore for the production-oriented GrowthBook stack.
+      It inherits the public mongodb/mongodb package and overrides credentials
+      with secret-backed values; no database port is published.
+    tags: growthbook, mongodb, standalone, production
+    website: https://www.mongodb.com/
+    source: https://github.com/mongodb/mongo
+    publisher: monk.io
+    private: false
+  permitted-secrets:
+    growthbook-mongodb-root-password: true
+  variables:
+    mongo-image:
+      type: string
+      value: "8.0"
+      description: Public MongoDB Docker image tag used by the production stack.
+    mongo-init-username:
+      type: string
+      env: MONGO_INITDB_ROOT_USERNAME
+      value: root
+      description: MongoDB root username for the GrowthBook production stack.
+    mongo-init-password:
+      type: string
+      env: MONGO_INITDB_ROOT_PASSWORD
+      value: <- secret("growthbook-mongodb-root-password")
+      description: Sensitive MongoDB root password read from the plain Monk secret name growthbook-mongodb-root-password.
+    mongo-init-database:
+      type: string
+      env: MONGO_INITDB_DATABASE
+      value: growthbook
+      description: Initial MongoDB database name for GrowthBook.
+  services:
+    mongodb:
+      container: mongodb
+      port: 27017
+      protocol: tcp
+      publish: false
+      description: Private MongoDB TCP endpoint for the production GrowthBook stack.
+
+stack-app:
+  defines: runnable
+  inherits: growthbook/base
+  metadata:
+    name: GrowthBook Standalone App
+    description: |
+      Production-oriented GrowthBook application wired to a private MongoDB
+      datastore and an internal proxy. Sensitive values are read from plain Monk
+      secret names and must be set before inheriting or deploying this stack.
+    tags: growthbook, feature-flags, experimentation, standalone, production
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  permitted-secrets:
+    growthbook-mongodb-root-password: true
+    growthbook-jwt-secret: true
+    growthbook-encryption-key: true
+    growthbook-secret-api-key: true
+  variables:
+    app-origin:
+      type: string
+      env: APP_ORIGIN
+      value: https://growthbook.example.com
+      description: Production public URL for the GrowthBook frontend; inherit and set this to the real ingress hostname.
+    api-host:
+      type: string
+      env: API_HOST
+      value: https://growthbook-api.example.com
+      description: Production public URL for the GrowthBook API; inherit and set this to the real ingress hostname.
+    mongodb-uri:
+      type: string
+      env: MONGODB_URI
+      value: <- "mongodb://root:" secret("growthbook-mongodb-root-password") "@" connection-hostname("mongodb") ":" connection-port("mongodb") "/growthbook?authSource=admin" concat-all
+      description: Sensitive MongoDB URI built from the MongoDB connection and the growthbook-mongodb-root-password secret.
+    jwt-secret:
+      type: string
+      env: JWT_SECRET
+      value: <- secret("growthbook-jwt-secret")
+      description: Sensitive JWT signing secret read from the plain Monk secret name growthbook-jwt-secret.
+    encryption-key:
+      type: string
+      env: ENCRYPTION_KEY
+      value: <- secret("growthbook-encryption-key")
+      description: Sensitive GrowthBook encryption key read from the plain Monk secret name growthbook-encryption-key.
+    proxy-enabled:
+      type: string
+      env: PROXY_ENABLED
+      value: "1"
+      description: Enables GrowthBook proxy support for the standalone stack.
+    proxy-host-internal:
+      type: string
+      env: PROXY_HOST_INTERNAL
+      value: <- "http://" connection-hostname("proxy") ":" connection-port("proxy") concat-all
+      description: Internal proxy URL read from the Monk proxy connection.
+    proxy-host-public:
+      type: string
+      env: PROXY_HOST_PUBLIC
+      value: https://growthbook-proxy.example.com
+      description: Production public proxy URL; inherit and set this to the real proxy ingress hostname.
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: <- secret("growthbook-secret-api-key")
+      description: Sensitive proxy shared API key read from the plain Monk secret name growthbook-secret-api-key.
+    uploads-volume-name:
+      type: string
+      value: growthbook-stack-uploads
+      description: Monk volume subdirectory used for uploaded files in the production stack.
+  services:
+    frontend:
+      container: growthbook
+      port: <- $frontend-port
+      protocol: tcp
+      publish: false
+      description: Private GrowthBook frontend service for production ingress.
+    api:
+      container: growthbook
+      port: <- $api-port
+      protocol: tcp
+      publish: false
+      description: Private GrowthBook API service for production ingress.
+  connections:
+    mongodb:
+      runnable: growthbook/stack-mongodb
+      service: mongodb
+      description: Private MongoDB service connected to GrowthBook.
+    proxy:
+      runnable: growthbook/stack-proxy
+      service: proxy
+      description: Internal GrowthBook proxy service connected to the app.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/stack-mongodb
+      timeout: 120
+
+stack-proxy:
+  defines: runnable
+  inherits: growthbook/proxy
+  metadata:
+    name: GrowthBook Standalone Proxy
+    description: |
+      Internal GrowthBook proxy for the production-oriented standalone stack.
+      It connects to the GrowthBook API over the Monk network and reads its
+      shared API key from a plain Monk secret name.
+    tags: growthbook, proxy, standalone, production
+    website: https://docs.growthbook.io/lib/proxy
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  permitted-secrets:
+    growthbook-secret-api-key: true
+  variables:
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: <- secret("growthbook-secret-api-key")
+      description: Sensitive shared API key matching the GrowthBook application SECRET_API_KEY.
+  services:
+    proxy:
+      container: proxy
+      port: <- $proxy-port
+      protocol: tcp
+      publish: false
+      description: Private GrowthBook proxy service for production ingress.
+  connections:
+    growthbook:
+      runnable: growthbook/stack-app
+      service: api
+      description: GrowthBook API service consumed by the proxy.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/stack-app
+      timeout: 180
+
+stack:
+  defines: process-group
+  metadata:
+    name: GrowthBook Standalone Stack
+    description: |
+      Production-oriented self-hosted GrowthBook stack with the app, private
+      MongoDB datastore, and internal GrowthBook proxy. No services are
+      published locally; production deployments should expose authenticated
+      GrowthBook endpoints through ingress in an inheriting environment-specific
+      template.
+    tags: growthbook, mongodb, proxy, standalone, production
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  runnable-list:
+    - growthbook/stack-mongodb
+    - growthbook/stack-app
+    - growthbook/stack-proxy
+
+stack-local-mongodb:
+  defines: runnable
+  metadata:
+    name: GrowthBook Local Stack MongoDB
+    description: |
+      Private MongoDB datastore for the local standalone verification flavor.
+      It is intentionally private to Monk workloads and uses the public mongo
+      Docker image for self-contained local testing.
+    tags: growthbook, mongodb, standalone, local
+    website: https://www.mongodb.com/
+    source: https://github.com/mongodb/mongo
+    publisher: monk.io
+    private: false
+  variables:
+    mongo-image:
+      type: string
+      value: "8.0"
+      description: Public MongoDB Docker image tag used by the local stack.
+    mongo-port:
+      type: int
+      value: 27017
+      description: MongoDB TCP port used by the local stack.
+    storage-volume-name:
+      type: string
+      value: growthbook-stack-local-mongodb
+      description: Monk volume subdirectory used for MongoDB data in the local stack.
+  containers:
+    mongodb:
+      image: mongo
+      image-tag: <- $mongo-image
+      restart: unless-stopped
+      entrypoint: mongod --bind_ip_all --port 27017
+      paths:
+        - <- `${monk-volume-path}/${storage-volume-name}:/data/db`
+  services:
+    mongodb:
+      container: mongodb
+      port: <- $mongo-port
+      protocol: tcp
+      publish: false
+      description: Private MongoDB TCP endpoint for the local GrowthBook stack.
+
+stack-local-app:
+  defines: runnable
+  inherits: growthbook/base
+  metadata:
+    name: GrowthBook Standalone Local App
+    description: |
+      Local verification flavor of the standalone GrowthBook app. It wires the
+      app to a private MongoDB service, enables the internal proxy, and publishes
+      non-privileged host ports for external HTTP checks.
+    tags: growthbook, feature-flags, experimentation, standalone, local
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  variables:
+    app-origin:
+      type: string
+      env: APP_ORIGIN
+      value: http://localhost:8400
+      description: Local public URL for the standalone GrowthBook frontend.
+    api-host:
+      type: string
+      env: API_HOST
+      value: http://localhost:8410
+      description: Local public URL for the standalone GrowthBook API.
+    mongodb-uri:
+      type: string
+      env: MONGODB_URI
+      value: <- "mongodb://" connection-hostname("mongodb") ":" connection-port("mongodb") "/growthbook" concat-all
+      description: MongoDB URI built from the local stack MongoDB Monk connection.
+    jwt-secret:
+      type: string
+      env: JWT_SECRET
+      value: <- random-uuid
+      description: Sensitive JWT signing secret generated for this disposable local flavor.
+    encryption-key:
+      type: string
+      env: ENCRYPTION_KEY
+      value: <- random-uuid
+      description: Sensitive GrowthBook encryption key generated for this disposable local flavor.
+    proxy-enabled:
+      type: string
+      env: PROXY_ENABLED
+      value: "1"
+      description: Enables GrowthBook proxy support for the local stack.
+    proxy-host-internal:
+      type: string
+      env: PROXY_HOST_INTERNAL
+      value: <- "http://" connection-hostname("proxy") ":" connection-port("proxy") concat-all
+      description: Internal proxy URL read from the Monk proxy connection.
+    proxy-host-public:
+      type: string
+      env: PROXY_HOST_PUBLIC
+      value: http://localhost:8430
+      description: Local public proxy URL for SDK use when a proxy endpoint is published by an inheriting local template.
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: local-growthbook-proxy-key
+      description: Sensitive shared proxy API key for this disposable local flavor.
+    uploads-volume-name:
+      type: string
+      value: growthbook-stack-local-uploads
+      description: Monk volume subdirectory used for uploaded files in the local stack.
+    frontend-host-port:
+      type: int
+      value: 8400
+      description: Non-privileged local host port published for the standalone GrowthBook frontend.
+    api-host-port:
+      type: int
+      value: 8410
+      description: Non-privileged local host port published for the standalone GrowthBook API.
+  services:
+    frontend:
+      container: growthbook
+      port: <- $frontend-port
+      protocol: tcp
+      publish: true
+      host-port: <- $frontend-host-port
+      description: Published local standalone GrowthBook frontend endpoint.
+    api:
+      container: growthbook
+      port: <- $api-port
+      protocol: tcp
+      publish: true
+      host-port: <- $api-host-port
+      description: Published local standalone GrowthBook API endpoint.
+  connections:
+    mongodb:
+      runnable: growthbook/stack-local-mongodb
+      service: mongodb
+      description: Private MongoDB service connected to the local GrowthBook app.
+    proxy:
+      runnable: growthbook/stack-local-proxy
+      service: proxy
+      description: Internal GrowthBook proxy service connected to the local app.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/stack-local-mongodb
+      timeout: 120
+
+stack-local-proxy:
+  defines: runnable
+  inherits: growthbook/proxy
+  metadata:
+    name: GrowthBook Standalone Local Proxy
+    description: |
+      Internal GrowthBook proxy for the local standalone flavor. It is kept
+      private locally so verification only checks the GrowthBook frontend and
+      API endpoints with known unauthenticated HTTP 200 responses.
+    tags: growthbook, proxy, standalone, local
+    website: https://docs.growthbook.io/lib/proxy
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  variables:
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: local-growthbook-proxy-key
+      description: Sensitive shared proxy API key matching the local GrowthBook app.
+  services:
+    proxy:
+      container: proxy
+      port: <- $proxy-port
+      protocol: tcp
+      publish: false
+      description: Private GrowthBook proxy service for the local standalone flavor.
+  connections:
+    growthbook:
+      runnable: growthbook/stack-local-app
+      service: api
+      description: GrowthBook API service consumed by the local proxy.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/stack-local-app
+      timeout: 180
+
+stack-local:
+  defines: process-group
+  metadata:
+    name: GrowthBook Standalone Local Stack
+    description: |
+      Local verification flavor of the standalone GrowthBook stack. It includes
+      the app, private MongoDB datastore, and internal GrowthBook proxy, with
+      published non-privileged ports for external HTTP proof.
+    tags: growthbook, mongodb, proxy, standalone, local
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  runnable-list:
+    - growthbook/stack-local-mongodb
+    - growthbook/stack-local-app
+    - growthbook/stack-local-proxy

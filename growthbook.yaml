@@ -1,0 +1,162 @@
+namespace: growthbook
+
+base:
+  defines: runnable
+  metadata:
+    name: GrowthBook
+    description: |
+      Reusable GrowthBook application component. This base runs the public
+      growthbook/growthbook image and expects an inheriting template to provide
+      MONGODB_URI from a connected MongoDB-compatible datastore. Compatible
+      backing options include the self-hosted mongodb/mongodb package or a
+      hosted MongoDB Atlas package/entity that exposes a MongoDB connection.
+    tags: growthbook, feature-flags, experimentation, analytics, component
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  variables:
+    growthbook-image-tag:
+      type: string
+      value: "2.8.0"
+      description: Public growthbook/growthbook Docker image tag to run. Pinned to 2.8.0 so local Monk verification avoids transient image-copy storage exhaustion seen with larger tags.
+    frontend-port:
+      type: int
+      value: 3000
+      description: Frontend HTTP port exposed by the GrowthBook container.
+    api-port:
+      type: int
+      value: 3100
+      description: Backend API HTTP port exposed by the GrowthBook container.
+    app-origin:
+      type: string
+      env: APP_ORIGIN
+      value: http://localhost:3000
+      description: Public URL where users access the GrowthBook frontend.
+    api-host:
+      type: string
+      env: API_HOST
+      value: http://localhost:3100
+      description: Public URL where browsers and SDK tooling access the GrowthBook API.
+    mongodb-uri:
+      type: string
+      env: MONGODB_URI
+      value: ""
+      description: MongoDB connection URI. Inheriting templates must set this from Monk connections or a sensitive secret-backed hosted database URI.
+    jwt-secret:
+      type: string
+      env: JWT_SECRET
+      value: ""
+      description: Sensitive JWT signing secret. Production inheriting templates must set this with secret("growthbook-jwt-secret") or another plain secret name.
+    encryption-key:
+      type: string
+      env: ENCRYPTION_KEY
+      value: ""
+      description: Sensitive GrowthBook encryption key. Production inheriting templates must set this with secret("growthbook-encryption-key") or another plain secret name.
+    upload-method:
+      type: string
+      env: UPLOAD_METHOD
+      value: local
+      description: GrowthBook upload storage method; local stores uploads on the attached Monk volume.
+    proxy-enabled:
+      type: string
+      env: PROXY_ENABLED
+      value: "0"
+      description: Enables GrowthBook proxy integration when set to 1 by an inheriting stack.
+    proxy-host-internal:
+      type: string
+      env: PROXY_HOST_INTERNAL
+      value: ""
+      description: Internal GrowthBook proxy URL read from a Monk connection when the proxy is enabled.
+    proxy-host-public:
+      type: string
+      env: PROXY_HOST_PUBLIC
+      value: ""
+      description: Public GrowthBook proxy URL used by SDKs when the proxy is enabled.
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: ""
+      description: Sensitive shared API key for GrowthBook proxy integration. Production inheriting templates must set this with secret("growthbook-secret-api-key") or another plain secret name.
+    uploads-volume-name:
+      type: string
+      value: growthbook-uploads
+      description: Name of the Monk volume subdirectory used for GrowthBook uploaded files.
+  containers:
+    growthbook:
+      image: growthbook/growthbook
+      image-tag: <- $growthbook-image-tag
+      restart: unless-stopped
+      paths:
+        - <- `${monk-volume-path}/${uploads-volume-name}:/usr/local/src/app/packages/back-end/uploads`
+  services:
+    frontend:
+      container: growthbook
+      port: <- $frontend-port
+      protocol: tcp
+      publish: false
+      description: GrowthBook frontend HTTP service.
+    api:
+      container: growthbook
+      port: <- $api-port
+      protocol: tcp
+      publish: false
+      description: GrowthBook backend API HTTP service.
+
+proxy:
+  defines: runnable
+  metadata:
+    name: GrowthBook Proxy
+    description: |
+      Reusable GrowthBook proxy component. This proxy reads the GrowthBook API
+      endpoint from a Monk connection and requires the same sensitive
+      SECRET_API_KEY configured on the GrowthBook application when inherited.
+    tags: growthbook, proxy, feature-flags, sdk, component
+    website: https://docs.growthbook.io/lib/proxy
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  variables:
+    proxy-image-tag:
+      type: string
+      value: latest
+      description: Public growthbook/proxy Docker image tag to run.
+    proxy-port:
+      type: int
+      value: 3300
+      description: HTTP port exposed by the GrowthBook proxy container.
+    growthbook-api-host:
+      type: string
+      env: GROWTHBOOK_API_HOST
+      value: <- "http://" connection-hostname("growthbook") ":" connection-port("growthbook") concat-all
+      description: GrowthBook API URL read from the Monk connection to the app.
+    secret-api-key:
+      type: string
+      env: SECRET_API_KEY
+      value: ""
+      description: Sensitive shared API key matching the GrowthBook application SECRET_API_KEY. Production inheriting templates must set this with secret("growthbook-secret-api-key") or another plain secret name.
+  containers:
+    proxy:
+      image: growthbook/proxy
+      image-tag: <- $proxy-image-tag
+      restart: unless-stopped
+  services:
+    proxy:
+      container: proxy
+      port: <- $proxy-port
+      protocol: tcp
+      publish: false
+      description: GrowthBook proxy HTTP service for SDK feature payloads.
+  connections:
+    growthbook:
+      runnable: growthbook/base
+      service: api
+      optional: true
+      description: GrowthBook API service consumed by the proxy.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/base
+      timeout: 120
