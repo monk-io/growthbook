@@ -61,13 +61,13 @@ example:
     app-origin:
       type: string
       env: APP_ORIGIN
-      value: http://localhost:8300
-      description: Local public URL for the GrowthBook example frontend.
+      value: <- "http://" ip-address-public ":" $frontend-host-port concat-all
+      description: Public URL for the GrowthBook example frontend, built from the node public IP and the published frontend host port.
     api-host:
       type: string
       env: API_HOST
-      value: http://localhost:8310
-      description: Local public URL for the GrowthBook example API.
+      value: <- "http://" ip-address-public ":" $api-host-port concat-all
+      description: Public URL for the GrowthBook example API, built from the node public IP and the published API host port.
     mongodb-uri:
       type: string
       env: MONGODB_URI
