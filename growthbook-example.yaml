@@ -1,0 +1,139 @@
+namespace: growthbook
+
+example-mongodb:
+  defines: runnable
+  metadata:
+    name: GrowthBook Example MongoDB
+    description: |
+      Private MongoDB server for the GrowthBook component example. It uses the
+      public mongo Docker image to demonstrate composition without
+      baking a database into the GrowthBook base component.
+    tags: growthbook, mongodb, example, local
+    website: https://www.mongodb.com/
+    source: https://github.com/mongodb/mongo
+    publisher: monk.io
+    private: false
+  variables:
+    mongo-image:
+      type: string
+      value: "8.0"
+      description: Public MongoDB Docker image tag used by the component example.
+    mongo-port:
+      type: int
+      value: 27017
+      description: MongoDB TCP port used by the component example.
+    storage-volume-name:
+      type: string
+      value: growthbook-example-mongodb
+      description: Monk volume subdirectory used for MongoDB data in the component example.
+  containers:
+    mongodb:
+      image: mongo
+      image-tag: <- $mongo-image
+      restart: unless-stopped
+      entrypoint: mongod --bind_ip_all --port 27017
+      paths:
+        - <- `${monk-volume-path}/${storage-volume-name}:/data/db`
+  services:
+    mongodb:
+      container: mongodb
+      port: <- $mongo-port
+      protocol: tcp
+      publish: false
+      description: Private MongoDB TCP endpoint for the GrowthBook component example.
+
+example:
+  defines: runnable
+  inherits: growthbook/base
+  metadata:
+    name: GrowthBook Component Example
+    description: |
+      Component example that inherits the GrowthBook base and wires it to a
+      concrete private MongoDB service through Monk connections. It publishes
+      non-privileged local host ports only for verification.
+    tags: growthbook, feature-flags, experimentation, example, local
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  variables:
+    app-origin:
+      type: string
+      env: APP_ORIGIN
+      value: <- "http://" ip-address-public ":" $frontend-host-port concat-all
+      description: Public URL for the GrowthBook example frontend, built from the node public IP and the published frontend host port.
+    api-host:
+      type: string
+      env: API_HOST
+      value: <- "http://" ip-address-public ":" $api-host-port concat-all
+      description: Public URL for the GrowthBook example API, built from the node public IP and the published API host port.
+    mongodb-uri:
+      type: string
+      env: MONGODB_URI
+      value: <- "mongodb://" connection-hostname("mongodb") ":" connection-port("mongodb") "/growthbook" concat-all
+      description: MongoDB URI built from the example MongoDB Monk connection.
+    jwt-secret:
+      type: string
+      env: JWT_SECRET
+      value: <- random-uuid
+      description: Sensitive JWT signing secret generated for this disposable local example.
+    encryption-key:
+      type: string
+      env: ENCRYPTION_KEY
+      value: <- random-uuid
+      description: Sensitive GrowthBook encryption key generated for this disposable local example.
+    uploads-volume-name:
+      type: string
+      value: growthbook-example-uploads
+      description: Monk volume subdirectory used for uploaded files in the component example.
+    frontend-host-port:
+      type: int
+      value: 8300
+      description: Non-privileged local host port published for the GrowthBook example frontend.
+    api-host-port:
+      type: int
+      value: 8310
+      description: Non-privileged local host port published for the GrowthBook example API.
+  services:
+    frontend:
+      container: growthbook
+      port: <- $frontend-port
+      protocol: tcp
+      publish: true
+      host-port: <- $frontend-host-port
+      description: Published local GrowthBook example frontend endpoint.
+    api:
+      container: growthbook
+      port: <- $api-port
+      protocol: tcp
+      publish: true
+      host-port: <- $api-host-port
+      description: Published local GrowthBook example API endpoint.
+  connections:
+    mongodb:
+      runnable: growthbook/example-mongodb
+      service: mongodb
+      description: Private MongoDB service connected to GrowthBook.
+  depends:
+    wait-for:
+      runnables:
+        - growthbook/example-mongodb
+      timeout: 120
+
+example-group:
+  defines: process-group
+  metadata:
+    name: GrowthBook Component Example Group
+    description: |
+      Demonstrates the GrowthBook component by composing the app with a private
+      MongoDB service from an existing Monk package.
+    tags: growthbook, mongodb, example, local
+    website: https://www.growthbook.io/
+    source: https://github.com/growthbook/growthbook
+    publisher: monk.io
+    icon: https://www.growthbook.io/favicon.ico
+    private: false
+  runnable-list:
+    - growthbook/example-mongodb
+    - growthbook/example
