@@ -110,10 +110,6 @@ stack-app:
       env: SECRET_API_KEY
       value: <- secret("growthbook-secret-api-key")
       description: Sensitive proxy shared API key read from the plain Monk secret name growthbook-secret-api-key.
-    uploads-volume-name:
-      type: string
-      value: growthbook-stack-uploads
-      description: Monk volume subdirectory used for uploaded files in the production stack.
   services:
     frontend:
       container: growthbook
@@ -226,18 +222,18 @@ stack-local-mongodb:
       type: int
       value: 27017
       description: MongoDB TCP port used by the local stack.
-    storage-volume-name:
-      type: string
-      value: growthbook-stack-local-mongodb
-      description: Monk volume subdirectory used for MongoDB data in the local stack.
   containers:
     mongodb:
       image: mongo
       image-tag: <- $mongo-image
       restart: unless-stopped
       entrypoint: mongod --bind_ip_all --port 27017
-      paths:
-        - <- `${monk-volume-path}/${storage-volume-name}:/data/db`
+      mounted-volumes:
+        mongodb-data:
+          path: /data/db
+  volumes:
+    mongodb-data:
+      kind: local
   services:
     mongodb:
       container: mongodb
@@ -307,10 +303,6 @@ stack-local-app:
       env: SECRET_API_KEY
       value: local-growthbook-proxy-key
       description: Sensitive shared proxy API key for this disposable local flavor.
-    uploads-volume-name:
-      type: string
-      value: growthbook-stack-local-uploads
-      description: Monk volume subdirectory used for uploaded files in the local stack.
     frontend-host-port:
       type: int
       value: 8400

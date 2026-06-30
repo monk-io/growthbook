@@ -22,18 +22,18 @@ example-mongodb:
       type: int
       value: 27017
       description: MongoDB TCP port used by the component example.
-    storage-volume-name:
-      type: string
-      value: growthbook-example-mongodb
-      description: Monk volume subdirectory used for MongoDB data in the component example.
   containers:
     mongodb:
       image: mongo
       image-tag: <- $mongo-image
       restart: unless-stopped
       entrypoint: mongod --bind_ip_all --port 27017
-      paths:
-        - <- `${monk-volume-path}/${storage-volume-name}:/data/db`
+      mounted-volumes:
+        mongodb-data:
+          path: /data/db
+  volumes:
+    mongodb-data:
+      kind: local
   services:
     mongodb:
       container: mongodb
@@ -83,10 +83,6 @@ example:
       env: ENCRYPTION_KEY
       value: <- random-uuid
       description: Sensitive GrowthBook encryption key generated for this disposable local example.
-    uploads-volume-name:
-      type: string
-      value: growthbook-example-uploads
-      description: Monk volume subdirectory used for uploaded files in the component example.
     frontend-host-port:
       type: int
       value: 8300
