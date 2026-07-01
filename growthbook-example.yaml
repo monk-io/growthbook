@@ -96,14 +96,12 @@ example:
       container: growthbook
       port: <- $frontend-port
       protocol: tcp
-      publish: true
       host-port: <- $frontend-host-port
       description: Published local GrowthBook example frontend endpoint.
     api:
       container: growthbook
       port: <- $api-port
       protocol: tcp
-      publish: true
       host-port: <- $api-host-port
       description: Published local GrowthBook example API endpoint.
   connections:
