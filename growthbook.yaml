@@ -79,17 +79,17 @@ base:
       env: SECRET_API_KEY
       value: ""
       description: Sensitive shared API key for GrowthBook proxy integration. Production inheriting templates must set this with secret("growthbook-secret-api-key") or another plain secret name.
-    uploads-volume-name:
-      type: string
-      value: growthbook-uploads
-      description: Name of the Monk volume subdirectory used for GrowthBook uploaded files.
   containers:
     growthbook:
       image: growthbook/growthbook
       image-tag: <- $growthbook-image-tag
       restart: unless-stopped
-      paths:
-        - <- `${monk-volume-path}/${uploads-volume-name}:/usr/local/src/app/packages/back-end/uploads`
+      mounted-volumes:
+        uploads:
+          path: /usr/local/src/app/packages/back-end/uploads
+  volumes:
+    uploads:
+      kind: local
   services:
     frontend:
       container: growthbook
