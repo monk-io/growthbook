@@ -316,12 +316,14 @@ stack-local-app:
       container: growthbook
       port: <- $frontend-port
       protocol: tcp
+      publish: true
       host-port: <- $frontend-host-port
       description: Published local standalone GrowthBook frontend endpoint.
     api:
       container: growthbook
       port: <- $api-port
       protocol: tcp
+      publish: true
       host-port: <- $api-host-port
       description: Published local standalone GrowthBook API endpoint.
   connections:
