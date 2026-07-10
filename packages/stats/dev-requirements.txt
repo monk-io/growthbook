@@ -534,9 +534,9 @@ jupyter-lsp==2.2.6 ; python_full_version >= "3.9.4" and python_version < "4.0" \
 jupyter-server-terminals==0.5.3 ; python_full_version >= "3.9.4" and python_version < "4.0" \
     --hash=sha256:41ee0d7dc0ebf2809c668e0fc726dfaf258fcd3e769568996ca731b6194ae9aa \
     --hash=sha256:5ae0295167220e9ace0edcfdb212afd2b01ee8d179fe6f23c899590e9b8a5269
-jupyter-server==2.16.0 ; python_full_version >= "3.9.4" and python_version < "4.0" \
-    --hash=sha256:3d8db5be3bc64403b1c65b400a1d7f4647a5ce743f3b20dbdefe8ddb7b55af9e \
-    --hash=sha256:65d4b44fdf2dcbbdfe0aa1ace4a842d4aaf746a2b7b168134d5aaed35621b7f6
+jupyter-server==2.20.0 ; python_full_version >= "3.9.4" and python_version < "4.0" \
+    --hash=sha256:b5778ba337d8015a3dc2b80803ecdd5ac18d3797fddf61a50ea5fb472b4ebe14 \
+    --hash=sha256:c3b67c93c471e947c18b5026f04f21614218adb706df8f48227d3ee8e0a7cdcc
 jupyter==1.1.1 ; python_full_version >= "3.9.4" and python_version < "4.0" \
     --hash=sha256:7a59533c22af65439b24bbe60373a4e95af8f16ac65a6c00820ad378e3f7cc83 \
     --hash=sha256:d55467bceabdea49d7e3624af7e33d59c37fff53ed3a350e1ac957bed731de7a
