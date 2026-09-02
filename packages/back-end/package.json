@@ -108,7 +108,7 @@
     "mongodb": "^4.17.2",
     "mongoose": "^6.13.9",
     "mssql": "^12.2.0",
-    "mysql2": "^3.11.3",
+    "mysql2": "^3.23.1",
     "node-fetch": "^2.6.1",
     "nodemailer": "^8.0.5",
     "number-format.js": "^2.0.9",
